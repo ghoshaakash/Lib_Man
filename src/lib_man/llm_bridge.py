@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 from groq import Groq
 
 from lib_man.config import GetKey
@@ -20,6 +21,7 @@ class LLMGen:
     def groq_response_gen(self, text: str) -> str | None:
         client = Groq(
             api_key=self.key,
+            max_retries=0,
         )
 
         chat_completion = client.chat.completions.create(
@@ -34,7 +36,12 @@ class LLMGen:
         return chat_completion.choices[0].message.content
 
     def gemini_response_gen(self, text: str) -> str | None:
-        client = genai.Client(api_key=self.key)
+        client = genai.Client(
+            api_key=self.key,
+            http_options=types.HttpOptions(
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
         interaction = client.interactions.create(model="gemini-4-hydrogen", input=text)
         return interaction.output_text
 

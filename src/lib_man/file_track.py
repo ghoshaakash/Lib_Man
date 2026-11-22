@@ -46,5 +46,5 @@ class FileTrack:
             ".djvu",
         }
 
-    def new_files(self) -> list[pathlib.Path]:
+    def get_files(self) -> list[pathlib.Path]:
         return sorted(self.files)

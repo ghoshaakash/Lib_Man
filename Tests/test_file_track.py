@@ -1,3 +1,5 @@
+import json
+
 from lib_man.file_track import FileTrack
 
 
@@ -16,7 +18,7 @@ def test_finds_documents(tmp_path):
     tracker = FileTrack(tmp_path)
 
     # Assert
-    assert set(tracker.new_files()) == {pdf, txt}
+    assert set(tracker.get_files()) == {pdf, txt}
 
 
 def test_does_not_rediscover_existing_files(tmp_path):
@@ -32,7 +34,7 @@ def test_does_not_rediscover_existing_files(tmp_path):
     tracker = FileTrack(tmp_path)
 
     # Assert
-    assert tracker.new_files() == []
+    assert tracker.get_files() == []
 
 
 def test_detects_new_files(tmp_path):
@@ -52,7 +54,7 @@ def test_detects_new_files(tmp_path):
     tracker = FileTrack(tmp_path)
 
     # Assert
-    assert set(tracker.new_files()) == {new_pdf}
+    assert set(tracker.get_files()) == {new_pdf}
 
 
 def test_detects_reintroduced_files(tmp_path):
@@ -75,4 +77,25 @@ def test_detects_reintroduced_files(tmp_path):
     tracker = FileTrack(tmp_path)
 
     # Assert
-    assert set(tracker.new_files()) == {pdf}
+    assert set(tracker.get_files()) == {pdf}
+
+
+def test_recursively_finds_supported_extensions_in_order(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    paths = [
+        nested / f"item{suffix}"
+        for suffix in (".PDF", ".txt", ".doc", ".azw", ".epub", ".djvu")
+    ]
+    for path in [*paths, nested / "ignored.docx", nested / "no_extension"]:
+        path.touch()
+    (nested / "folder.pdf").mkdir()
+
+    tracker = FileTrack()
+
+    assert tracker.get_files() == sorted(paths)
+    tracker.create_file()
+    assert json.loads(tracker.file_path.read_text()) == [
+        path.relative_to(tmp_path).as_posix() for path in sorted(paths)
+    ]
