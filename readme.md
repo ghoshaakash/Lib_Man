@@ -1,6 +1,6 @@
 # Auto File Naming and Management
 
-Issue: you have downloaded a bnch of files. More often than not the file names contain stuff you would rather not have it there, or is something incomprehensible. The goal is to monitor files, fix names and metadata and shelf them appropoately.
+Issue: you have downloaded a bunch of files. More often than not the file names contain stuff you would rather not have it there, or is something incomprehensible. The goal is to monitor files, fix names and metadata and shelf them appropriately.
 
 ## First run
 
