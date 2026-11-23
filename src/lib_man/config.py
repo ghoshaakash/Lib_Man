@@ -40,10 +40,10 @@ def set_file_cofigs(base_path: pathlib.Path | None = None) -> None:
     if base_path is None:
         base_path = pathlib.Path.cwd()
     while True:
-        provider = input("Provider (groq or google): ").strip().lower()
-        if provider in {"groq", "google"}:
+        provider = input("Provider (groq, google, or ollama): ").strip().lower()
+        if provider in {"groq", "google", "ollama"}:
             break
-        print("Enter groq or google.")
+        print("Enter groq, google, or ollama.")
 
     paths = {
         "provider": provider,

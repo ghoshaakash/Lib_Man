@@ -78,7 +78,7 @@ def main() -> None:
     parser.add_argument(
         "-provider",
         type=lambda value: value.strip().lower(),
-        choices=("groq", "google"),
+        choices=("groq", "google", "ollama"),
     )
     parser.add_argument(
         "-bookpath", dest="book_path", metavar="PATH", help="book shelf"
