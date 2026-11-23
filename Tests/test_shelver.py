@@ -12,7 +12,7 @@ from lib_man import shelver
 @pytest.mark.parametrize(
     ("category", "relative_path"),
     [
-        ("fiction", "fiction/2 Example Series_Methods_Author.epub"),
+        ("fiction", "fiction/Vol 002_Example Series_Methods_Author.epub"),
         ("non-fiction", "non-fiction/Methods_Example Series.epub"),
         ("academic", "STEM/Math/Methods_Author_2nd edition.epub"),
         ("unknown", "Methods_Author.epub"),
@@ -70,6 +70,30 @@ def test_academic_book_with_unknown_category_goes_to_stem(tmp_path, monkeypatch)
     )
 
     assert shelf.destination == books / "STEM" / "Methods_2021.epub"
+
+
+def test_academic_filename_uses_clean_title_and_year_after_lookup(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "download.pdf"
+    source.touch()
+    books = tmp_path / "Books"
+    monkeypatch.setattr(
+        shelver, "_lookup_book", Mock(return_value={"name": "Methods — Fourth Edition"})
+    )
+    metadata = {
+        "type": "book",
+        "name": "Methods",
+        "author": "Author",
+        "book_category": "academic",
+        "year": "Methods (2013)",
+    }
+
+    shelf = shelver.shelver(books, metadata, source=source)
+
+    assert shelf.destination == books / "STEM" / "Methods_Author_2013.pdf"
+    assert metadata["name"] == "Methods"
+    assert metadata["year"] == "2013"
 
 
 @pytest.mark.parametrize(
@@ -171,11 +195,18 @@ def test_move_file_avoids_overwrite_and_trims_utf8_names(tmp_path):
     source = tmp_path / "download.pdf"
     source.write_text("second")
 
-    destination = shelver._move_file(source, directory, "é" * 150)
+    with pytest.raises(shelver.DestinationExists) as collision:
+        shelver._move_file(source, directory, "é" * 150)
 
+    assert collision.value.filename == existing
     assert existing.read_text() == "first"
+    assert source.read_text() == "second"
+    assert list(directory.iterdir()) == [existing]
+
+    existing.unlink()
+    destination = shelver._move_file(source, directory, "é" * 150)
     assert destination.read_text() == "second"
-    assert destination.name == "é" * 123 + " (2).pdf"
+    assert destination == existing
     assert not source.exists()
     assert shelver._move_file(destination, directory, destination.stem) == destination
 

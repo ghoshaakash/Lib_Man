@@ -49,7 +49,7 @@ def test_ask_gives_up_after_two_retries(mocked_lookup):
     ("answers", "expected"),
     [
         (
-            [" BOOK ", "Book title", "A_B", "2020", " Academic "],
+            [" BOOK ", " Academic ", "Book title", "A_B", "2020"],
             {
                 "type": "book",
                 "name": "Book title",
@@ -59,13 +59,23 @@ def test_ask_gives_up_after_two_retries(mocked_lookup):
             },
         ),
         (
-            ["book", None, None, None, "unrecognized"],
+            ["book", "unrecognized", None, None, None],
             {
                 "type": "book",
                 "name": "unknown",
                 "author": "unknown",
                 "year": "unknown",
                 "book_category": "unknown",
+            },
+        ),
+        (
+            ["book", "fiction", "Novel\nSubtitle_Alice_Bob", "2021"],
+            {
+                "type": "book",
+                "name": "Novel Subtitle",
+                "author": "Alice_Bob",
+                "year": "2021",
+                "book_category": "fiction",
             },
         ),
         (
@@ -91,7 +101,14 @@ def test_ask_gives_up_after_two_retries(mocked_lookup):
             },
         ),
     ],
-    ids=["book", "missing-book-fields", "paper", "document", "unknown"],
+    ids=[
+        "book",
+        "missing-book-fields",
+        "standalone-fiction",
+        "paper",
+        "document",
+        "unknown",
+    ],
 )
 def test_get_metadata(mocked_lookup, answers, expected):
     lookup, calls = mocked_lookup
@@ -104,3 +121,27 @@ def test_get_metadata(mocked_lookup, answers, expected):
             "File name: file-name\nFirst few pages:\nfirst-page text" in request.args[0]
         )
     calls.sleep.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("title", "reply", "expected_title", "expected_year"),
+    [
+        ("A Study of 1900", "A Study of 1900 (2012)", "A Study of 1900", "2012"),
+        ("A Study of 1900", "A Study of 1900", "A Study of 1900", "unknown"),
+        ("Methods", "First published August\u00a02025.", "Methods", "2025"),
+        ("Methods", "2018-05-10", "Methods", "2018"),
+        ("Methods", "Copyright 2006; revised 2020", "Methods", "unknown"),
+        ("Methods", "ISBN 978-1-4471-2158-9", "Methods", "unknown"),
+        ("Methods — Fourth Edition", "Fourth edition, 2013", "Methods", "2013"),
+    ],
+)
+def test_book_metadata_cleans_title_and_year(
+    mocked_lookup, title, reply, expected_title, expected_year
+):
+    lookup, calls = mocked_lookup
+    calls.provider.response.side_effect = ["book", "academic", title, "Author", reply]
+
+    result = lookup.get_metadata("download", "first-page text")
+
+    assert result["name"] == expected_title
+    assert result["year"] == expected_year

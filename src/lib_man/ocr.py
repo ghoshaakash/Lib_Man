@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from shutil import which
 from tempfile import TemporaryDirectory
@@ -46,7 +46,8 @@ def ocr(level: int, path: Path | str, pages: int) -> str:
     engine: RapidOCR | None = None
     page_texts: list[str] = []
 
-    with _open_document(path, pages) as document:
+    diagnostics = _quiet_mupdf() if path.suffix.lower() == ".epub" else nullcontext()
+    with diagnostics, _open_document(path, pages) as document:
         for page_number in range(min(pages, len(document))):
             page = document[page_number]
             try:
@@ -58,7 +59,12 @@ def ocr(level: int, path: Path | str, pages: int) -> str:
                 and sum(not char.isspace() for char in text) < MIN_EXTRACTED_CHARACTERS
             ):
                 if engine is None:
-                    engine = RapidOCR(params={"Global.max_side_len": max_side_len})
+                    engine = RapidOCR(
+                        params={
+                            "Global.max_side_len": max_side_len,
+                            "Global.log_level": "error",
+                        }
+                    )
                 image = page.get_pixmap(dpi=dpi)
                 result = engine(image.tobytes("png"))
                 lines = getattr(result, "txts", None)
@@ -66,6 +72,17 @@ def ocr(level: int, path: Path | str, pages: int) -> str:
             page_texts.append(text)
 
     return "\n\n".join(page_texts).strip()
+
+
+@contextmanager
+def _quiet_mupdf() -> Generator[None]:
+    # MuPDF reports recoverable EPUB markup errors even when extraction succeeds.
+    show_errors = pymupdf.TOOLS.mupdf_display_errors()
+    pymupdf.TOOLS.mupdf_display_errors(False)
+    try:
+        yield
+    finally:
+        pymupdf.TOOLS.mupdf_display_errors(show_errors)
 
 
 @contextmanager

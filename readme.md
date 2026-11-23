@@ -2,21 +2,37 @@
 
 Issue: you have downloaded a bunch of files. More often than not the file names contain stuff you would rather not have it there, or is something incomprehensible. The goal is to monitor files, fix names and metadata and shelf them appropriately.
 
-## First run
+## Setup
 
-Set `GROQ_KEY` or `GEMINI_KEY` for your provider as shown in [.env.example](.env.example). You can put the key in a `.env` file in the checkout. Replace the checkout path below with yours and run these commands to scan Downloads.
+Clone the repository and run the setup script from the checkout.
 
 ```sh
-lib_man_repo=/absolute/path/to/Lib_Man
-cd "$lib_man_repo"
-uv sync --locked
-cd ~/Downloads
-PYTHONPATH="$lib_man_repo/src" "$lib_man_repo/.venv/bin/python" -m lib_man.main
+./LibManInit.sh
 ```
+
+The script runs `uv sync --locked` and adds the `libman` alias to your Zsh startup file. Open a new Zsh session or run `source ~/.zshrc` to load the alias in your current terminal.
+
+Set `GROQ_KEY` or `GEMINI_KEY` for your provider as shown in [.env.example](.env.example). You can put the key in a `.env` file in the checkout.
+
+## Usage
+
+Run `libman` from any directory. The `-base` flag selects the folder to scan. Use `-base=.` for the current directory.
+
+```sh
+libman -base="$HOME/Downloads"
+```
+
+LibMan scans immediately, then waits five seconds between scans. Press Ctrl+C to stop.
 
 If `file_config.json` is missing, the app asks for your provider and the document, paper, and book shelves. Leave a shelf blank to skip moving that type. Keep every shelf outside the folder you scan and keep the scan folder outside every shelf. For example, scan `~/Downloads` and set the document shelf to `~/Documents`.
 
-The command scans once and exits. Run it again from the same folder when you need it. Later runs reuse the saved configuration and scan history.
+Use `-provider=groq` or `-provider=google`, `-docpath=PATH`, `-paperpath=PATH`, or `-bookpath=PATH` to save settings and exit. Existing settings carry over unless you supply a new value. Use an empty shelf path to disable that shelf. A configuration created with flags defaults to Groq and leaves unspecified shelves disabled.
+
+```sh
+libman -base="$HOME/Downloads" -docpath="$HOME/Documents" -bookpath="$HOME/Books"
+```
+
+Later runs reuse the saved configuration and scan history. Each successful move appends the original filename, full destination path, and metadata to `lib_man.log` in the scan folder.
 
 If a model request fails, the app waits 10 seconds before each of two retries. If both retries fail, it leaves that file in place and moves on to the next one. The skipped file stays in the scan history.
 

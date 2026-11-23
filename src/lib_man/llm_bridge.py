@@ -1,7 +1,8 @@
+from asyncio import sleep
 from google import genai
 from google.genai import types
 from groq import Groq
-
+import time
 from lib_man.config import GetKey
 
 
@@ -19,6 +20,7 @@ class LLMGen:
         self.provider = provider
 
     def groq_response_gen(self, text: str) -> str | None:
+        
         client = Groq(
             api_key=self.key,
             max_retries=0,
@@ -33,6 +35,8 @@ class LLMGen:
             ],
             model="openai/gpt-oss-120b",
         )
+        
+        
         return chat_completion.choices[0].message.content
 
     def gemini_response_gen(self, text: str) -> str | None:

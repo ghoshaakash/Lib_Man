@@ -8,6 +8,12 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from lib_man.metadata import book_title, publication_year, volume_number
+
+
+class DestinationExists(FileExistsError):
+    """The intended destination is already occupied."""
+
 
 class shelver:
     def __init__(
@@ -33,7 +39,7 @@ class shelver:
         first check if exact mathch if found via online apis. if yes update metadata.
 
         if book is fiction:
-            book name= (opt)series number and series name_book_name_author
+            book name=book_name_author or Vol NNN_series_name_book_name_author
             goes to path/fiction/ book_name
         if book is non fiction
             book name= book_name_series name
@@ -57,10 +63,17 @@ class shelver:
 
         verified = _lookup_book(self.metadata)
         metadata = self.metadata | verified
-        title = _text(metadata.get("name")) or self.source.stem
+        raw_title = _text(metadata.get("name"))
+        clean_title = book_title(raw_title)
+        if clean_title and clean_title != raw_title:
+            metadata["name"] = clean_title
+        if "year" in metadata:
+            metadata["year"] = (
+                publication_year(_text(metadata["year"]), raw_title) or "unknown"
+            )
+        title = clean_title or self.source.stem
         author = _text(metadata.get("author"))
         series = _text(metadata.get("series"))
-        number = _text(metadata.get("series_number"))
         category = " ".join(
             _text(metadata.get("book_category")).lower().replace("-", " ").split()
         )
@@ -68,12 +81,20 @@ class shelver:
         match category:
             case "fiction":
                 directory = self.path / "fiction"
-                series_prefix = (
-                    " ".join(part for part in (number, series) if part)
-                    if series
-                    else ""
+                number = volume_number(
+                    _text(self.metadata.get("series_number"))
+                ) or volume_number(_text(metadata.get("series_number")))
+                source_series = re.fullmatch(
+                    r"(.+?)\s+-\s+([0-9]{1,3})\s+-\s+(.+)", self.source.stem
                 )
-                parts = (series_prefix, title, author)
+                if source_series and _book_key(source_series[3]) == _book_key(author):
+                    series = source_series[1]
+                    number = volume_number(source_series[2])
+                if series and number:
+                    metadata.update(series=series, series_number=number)
+                    parts = (f"Vol {number}", series, title, author)
+                else:
+                    parts = (title, author)
             case "non fiction" | "nonfiction":
                 directory = self.path / "non-fiction"
                 parts = (title, series)
@@ -87,7 +108,7 @@ class shelver:
 
         stem = "_".join(part for part in map(_filename_part, parts) if part) or "book"
         self.destination = _move_file(self.source, directory, stem)
-        self.metadata.update(verified)
+        self.metadata.update(metadata)
         return self.destination
 
     def _shelve_document(self) -> None:
@@ -145,6 +166,13 @@ def _full_title(record: dict[str, Any]) -> str:
     )
 
 
+def _title_keys(record: dict[str, Any]) -> set[str]:
+    return {
+        _book_key(book_title(title))
+        for title in (_text(record.get("title")), _full_title(record))
+    }
+
+
 def _open_library(endpoint: str, **params: str) -> dict[str, Any]:
     url = f"https://openlibrary.org{endpoint}"
     if params:
@@ -161,7 +189,7 @@ def _open_library(endpoint: str, **params: str) -> dict[str, Any]:
 
 
 def _lookup_book(metadata: dict[str, Any]) -> dict[str, str]:
-    title = _text(metadata.get("name"))
+    title = book_title(_text(metadata.get("name")))
     authors = [
         name.strip()
         for name in _text(metadata.get("author")).split("_")
@@ -181,8 +209,7 @@ def _lookup_book(metadata: dict[str, Any]) -> dict[str, str]:
     matches = [
         record
         for record in (results.get("docs") or [])
-        if title_key
-        in {_book_key(_text(record.get("title"))), _book_key(_full_title(record))}
+        if title_key in _title_keys(record)
         and author_keys
         == {_book_key(name) for name in (record.get("author_name") or [])}
     ]
@@ -195,19 +222,14 @@ def _lookup_book(metadata: dict[str, Any]) -> dict[str, str]:
         data = _open_library(f"/works/{work_id}/editions.json", limit="50")
         editions = data.get("entries") or []
         if data.get("size") == len(editions):
-            year = re.search(r"\b\d{4}\b", _text(metadata.get("year")))
+            year = publication_year(_text(metadata.get("year")), title)
             exact_editions = [
                 edition
                 for edition in editions
-                if title_key
-                in {
-                    _book_key(_text(edition.get("title"))),
-                    _book_key(_full_title(edition)),
-                }
+                if title_key in _title_keys(edition)
                 and (
-                    year is None
-                    or year[0]
-                    in re.findall(r"\b\d{4}\b", _text(edition.get("publish_date")))
+                    not year
+                    or year == publication_year(_text(edition.get("publish_date")))
                 )
             ]
             if len(exact_editions) == 1:
@@ -220,11 +242,10 @@ def _edition_metadata(edition: dict[str, Any]) -> dict[str, str]:
     series_name, _, series_number = _text(
         series[0] if len(series) == 1 else ""
     ).partition(";")
-    year = re.search(r"\b\d{4}\b", _text(edition.get("publish_date")))
     fields = {
         "name": _full_title(edition),
         "edition": _text(edition.get("edition_name")),
-        "year": year[0] if year else "",
+        "year": publication_year(_text(edition.get("publish_date"))),
         "series": series_name.strip(),
         "series_number": series_number.strip(" #") or _text(edition.get("volume")),
     }
@@ -243,26 +264,22 @@ def _move_file(source: Path, directory: Path, stem: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     directory = directory.resolve()
     source = source.parent.resolve() / source.name
-    number = 1
-    while True:
-        suffix = source.suffix if number == 1 else f" ({number}){source.suffix}"
-        # Leave room for both the extension and any collision suffix.
-        budget = 255 - len(suffix.encode("utf-8"))
-        name = (
-            stem.encode("utf-8")[: max(0, budget)]
-            .decode("utf-8", errors="ignore")
-            .rstrip(" .")
-        )
-        destination = directory / f"{name}{suffix}"
-        if destination == source:
-            return source
-        try:
-            destination.touch(exist_ok=False)
-        except FileExistsError:
-            number += 1
-            continue
-        try:
-            return source.move(destination)
-        except OSError:
-            destination.unlink(missing_ok=True)
-            raise
+    suffix = source.suffix
+    budget = 255 - len(suffix.encode("utf-8"))
+    name = (
+        stem.encode("utf-8")[: max(0, budget)]
+        .decode("utf-8", errors="ignore")
+        .rstrip(" .")
+    )
+    destination = directory / f"{name}{suffix}"
+    if destination == source:
+        return source
+    try:
+        destination.touch(exist_ok=False)
+    except FileExistsError as error:
+        raise DestinationExists(error.errno, error.strerror, destination) from None
+    try:
+        return source.move(destination)
+    except OSError:
+        destination.unlink(missing_ok=True)
+        raise

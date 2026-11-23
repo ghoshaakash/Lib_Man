@@ -38,7 +38,9 @@ def test_scanned_pages_reuse_one_ocr_engine(tmp_path, monkeypatch):
     monkeypatch.setattr(ocr, "RapidOCR", engine)
 
     assert ocr.ocr(1, source, 5) == "First line\nSecond line\n\nLast page"
-    engine.assert_called_once_with(params={"Global.max_side_len": 4096})
+    engine.assert_called_once_with(
+        params={"Global.max_side_len": 4096, "Global.log_level": "error"}
+    )
     assert engine.return_value.call_count == 2
     for args in engine.return_value.call_args_list:
         assert args.args[0].startswith(b"\x89PNG")

@@ -51,12 +51,17 @@ def set_file_cofigs(base_path: pathlib.Path | None = None) -> None:
         "paper_path": input("Paper shelf (blank to skip): ").strip(),
         "book_path": input("Book shelf (blank to skip): ").strip(),
     }
+    write_file_configs(paths, base_path)
 
+
+def write_file_configs(config: dict, base_path: pathlib.Path | None = None) -> None:
+    if base_path is None:
+        base_path = pathlib.Path.cwd()
     file_path = base_path / "file_config.json"
     with TemporaryDirectory(dir=base_path) as temporary:
         pending_config = pathlib.Path(temporary) / file_path.name
         with pending_config.open("w", encoding="utf-8") as file:
-            json.dump(paths, file, indent=4, ensure_ascii=False)
+            json.dump(config, file, indent=4, ensure_ascii=False)
         pending_config.replace(file_path)
 
 
