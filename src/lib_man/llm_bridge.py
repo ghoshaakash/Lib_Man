@@ -1,7 +1,8 @@
 import json
 import os
-import time
-from asyncio import sleep
+import sys
+from time import perf_counter
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from google import genai
@@ -69,10 +70,44 @@ class LLMGen:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=120) as response:
-            content = json.load(response)["message"]["content"]
+        trace = os.getenv("LIB_MAN_OLLAMA_TRACE") == "1"
+        if trace:
+            print(
+                f"\nOllama request {request.full_url}\n{json.dumps(payload, ensure_ascii=False, indent=2)}",
+                file=sys.stderr,
+                flush=True,
+            )
+        started = perf_counter()
+        try:
+            with urlopen(request, timeout=120) as response:
+                result = json.load(response)
+        except HTTPError as error:
+            if trace:
+                with error:
+                    body = error.read().decode("utf-8", errors="replace")
+                print(
+                    f"Ollama HTTP {error.code} after {perf_counter() - started:.2f}s\n{body}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            raise
+        except Exception as error:
+            if trace:
+                print(
+                    f"Ollama request failed after {perf_counter() - started:.2f}s: {error}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            raise
+        if trace:
+            print(
+                f"Ollama response after {perf_counter() - started:.2f}s\n{json.dumps(result, ensure_ascii=False, indent=2)}",
+                file=sys.stderr,
+                flush=True,
+            )
+        content = result["message"]["content"]
         if not isinstance(content, str):
-            raise RuntimeError("Ollama returned a non-text response.")
+            raise TypeError("Ollama returned a non-text response.")
         return content
 
     def response(self, text: str) -> str | None:

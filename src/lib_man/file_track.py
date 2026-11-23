@@ -2,6 +2,8 @@ import json
 import pathlib
 from collections.abc import Iterator
 
+DOCUMENT_EXTENSIONS = {".pdf", ".txt", ".doc", ".azw", ".epub", ".djvu"}
+
 
 class FileTrack:
     def __init__(self, base_path: str | None = None):
@@ -37,14 +39,7 @@ class FileTrack:
                 json.dump([], fp=f)
 
     def is_doc(self, file_path: pathlib.Path) -> bool:
-        return file_path.suffix.lower() in {
-            ".pdf",
-            ".txt",
-            ".doc",
-            ".azw",
-            ".epub",
-            ".djvu",
-        }
+        return file_path.suffix.lower() in DOCUMENT_EXTENSIONS
 
     def get_files(self) -> list[pathlib.Path]:
         return sorted(self.files)

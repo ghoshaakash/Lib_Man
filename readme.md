@@ -56,6 +56,29 @@ TODO
 
 - Write metadata into the files themselves.
 
+## Classify with an AI subscription
+
+Use your configured scan folder and shelves.
+
+```sh
+libman -base="$HOME/lib_man_test" -I_have_an_ai_subsciption -init
+```
+
+The scan folder gets an `ai_subscription` directory with `reference.csv`,
+`to_fill.csv`, and `rules.md`. Give your AI `to_fill.csv` and `rules.md` and
+replace `to_fill.csv` with the result. Keep `reference.csv` as generated. The
+CSV includes extracted document text and full local paths, so review it before
+uploading it to an external service.
+
+```sh
+libman -base="$HOME/lib_man_test" -I_have_an_ai_subsciption -finalize
+```
+
+Finalize checks the complete CSV against the reference and checks destinations
+for collisions before moving files. An unknown classification or a disabled
+shelf leaves a file in place. Move the `ai_subscription` directory aside when
+you are ready to export another batch.
+
 ## Tests
 
 Run these from the checkout.

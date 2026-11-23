@@ -48,6 +48,7 @@ def run(
     *,
     scan_once: bool,
     interval: float | None,
+    subscription_mode: str | None = None,
 ) -> None:
     try:
         os.chdir(Path(base).expanduser())
@@ -59,7 +60,14 @@ def run(
     try:
         flock(directory, LOCK_EX)
         update_config(updates)
-        if scan_once or interval is not None:
+        if subscription_mode is not None:
+            from lib_man.I_have_an_ai_subsciption import finalize, initialize
+
+            try:
+                (initialize if subscription_mode == "init" else finalize)()
+            except (OSError, ValueError, RuntimeError) as error:
+                raise SystemExit(str(error)) from None
+        elif scan_once or interval is not None:
             scan(directory, interval)
     except KeyboardInterrupt:
         raise SystemExit(130) from None
@@ -92,6 +100,13 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("-run", action="store_true", help="scan once")
     mode.add_argument("-monitor", action="store_true", help="scan repeatedly")
+    mode.add_argument(
+        "-init", dest="subscription_mode", action="store_const", const="init"
+    )
+    mode.add_argument(
+        "-finalize", dest="subscription_mode", action="store_const", const="finalize"
+    )
+    parser.add_argument("-I_have_an_ai_subsciption", action="store_true")
     parser.add_argument(
         "-t",
         type=float,
@@ -101,6 +116,8 @@ def main() -> None:
     args = parser.parse_args()
     if not args.basedir:
         parser.error("-basedir requires a nonempty path")
+    if args.I_have_an_ai_subsciption != bool(args.subscription_mode):
+        parser.error("use -I_have_an_ai_subsciption with -init or -finalize")
     if args.t is not None:
         if not args.monitor:
             parser.error("-t requires -monitor")
@@ -115,7 +132,13 @@ def main() -> None:
     interval = None
     if args.monitor:
         interval = args.t or 5.0
-    run(args.basedir, updates, scan_once=args.run, interval=interval)
+    run(
+        args.basedir,
+        updates,
+        scan_once=args.run,
+        interval=interval,
+        subscription_mode=args.subscription_mode,
+    )
 
 
 if __name__ == "__main__":

@@ -257,13 +257,7 @@ def _filename_part(value: str) -> str:
     return " ".join(cleaned.split()).strip(" .")
 
 
-def _move_file(source: Path, directory: Path, stem: str) -> Path:
-    if not source.is_file(follow_symlinks=False):
-        raise ValueError(f"Source must be a regular file: {source}")
-
-    directory.mkdir(parents=True, exist_ok=True)
-    directory = directory.resolve()
-    source = source.parent.resolve() / source.name
+def _destination_path(source: Path, directory: Path, stem: str) -> Path:
     suffix = source.suffix
     budget = 255 - len(suffix.encode("utf-8"))
     name = (
@@ -271,7 +265,16 @@ def _move_file(source: Path, directory: Path, stem: str) -> Path:
         .decode("utf-8", errors="ignore")
         .rstrip(" .")
     )
-    destination = directory / f"{name}{suffix}"
+    return directory / f"{name}{suffix}"
+
+
+def _move_file(source: Path, directory: Path, stem: str) -> Path:
+    if not source.is_file(follow_symlinks=False):
+        raise ValueError(f"Source must be a regular file: {source}")
+
+    directory.mkdir(parents=True, exist_ok=True)
+    source = source.parent.resolve() / source.name
+    destination = _destination_path(source, directory.resolve(), stem)
     if destination == source:
         return source
     try:

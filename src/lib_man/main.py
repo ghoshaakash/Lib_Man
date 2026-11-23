@@ -1,4 +1,3 @@
-from time import sleep
 import json
 import sys
 from pathlib import Path
@@ -36,7 +35,6 @@ def main(*, show_empty: bool = True) -> None:
     moved = 0
     print(f"Scanning {scan_dir}\nNew files: {total}", flush=True)
     for index, file in enumerate(files, start=1):
-        sleep(5)
         source = file.relative_to(scan_dir)
         print(f"\n[{index}/{total}] {source}\n  Reading the first pages...", flush=True)
         txt = ocr(0, file, 5)
